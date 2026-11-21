@@ -10,6 +10,8 @@ import { authMiddleware } from "./middlewares/auth.middleware.js";
 import userRoutes from "./modules/users/user.routes.js";
 import serviceRoutes from "./modules/services/service.routes.js";
 import bookingRoutes from "./modules/bookings/booking.routes.js";
+import paymentRoutes from "./modules/payments/payment.routes.js";
+import { handleWebhook } from "./modules/payments/payment.controller.js";
 
 const app = express();
 
@@ -37,8 +39,15 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Stripe-Signature"],
   })
+);
+
+// Stripe webhook needs raw body — mount BEFORE json parser
+app.post(
+  "/api/payments/webhook",
+  express.raw({ type: "application/json" }),
+  handleWebhook as any
 );
 
 // Body parsers
@@ -109,7 +118,7 @@ app.get("/api/health", async (_req, res) => {
 app.use("/api/users", userRoutes);
 app.use("/api/services", serviceRoutes);
 app.use("/api/bookings", bookingRoutes);
-// app.use("/api/payments", paymentRoutes);
+app.use("/api/payments", paymentRoutes);
 
 // Simple status endpoint for DB info (development only)
 app.get("/api/status", async (_req, res) => {
