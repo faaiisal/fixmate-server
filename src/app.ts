@@ -1,10 +1,13 @@
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import { env } from "./config/env.js";
 import { notFoundMiddleware } from "./middlewares/not-found.middleware.js";
 import { errorMiddleware } from "./middlewares/error.middleware.js";
 import { successResponse } from "./utils/api-response.js";
 import { getCollectionsInfo, getDb } from "./config/db.js";
+import { authMiddleware } from "./middlewares/auth.middleware.js";
+import userRoutes from "./modules/users/user.routes.js";
 
 const app = express();
 
@@ -39,6 +42,10 @@ app.use(
 // Body parsers
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(cookieParser());
+
+// Auth middleware — populates req.user if valid BetterAuth session present (does not block public routes)
+app.use(authMiddleware);
 
 // Root
 app.get("/", (_req, res) => {
@@ -97,7 +104,7 @@ app.get("/api/health", async (_req, res) => {
 });
 
 // Placeholder for future modules — will be mounted in later phases
-// app.use("/api/users", userRoutes);
+app.use("/api/users", userRoutes);
 // app.use("/api/services", serviceRoutes);
 // app.use("/api/bookings", bookingRoutes);
 // app.use("/api/payments", paymentRoutes);
