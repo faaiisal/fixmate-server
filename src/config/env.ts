@@ -48,7 +48,7 @@ export interface Env {
 
 function loadEnv(): Env {
   const env: Env = {
-    PORT: getNumber("PORT", 5000),
+    PORT: getNumber("PORT", 8000),
     NODE_ENV: (getEnv("NODE_ENV", false, "development") as Env["NODE_ENV"]) || "development",
     MONGODB_URI: getEnv("MONGODB_URI", true),
     DB_NAME: getEnv("DB_NAME", false, "fixmatedb") || "fixmatedb",
