@@ -8,6 +8,7 @@ import { successResponse } from "./utils/api-response.js";
 import { getCollectionsInfo, getDb } from "./config/db.js";
 import { authMiddleware } from "./middlewares/auth.middleware.js";
 import userRoutes from "./modules/users/user.routes.js";
+import serviceRoutes from "./modules/services/service.routes.js";
 
 const app = express();
 
@@ -105,7 +106,7 @@ app.get("/api/health", async (_req, res) => {
 
 // Placeholder for future modules — will be mounted in later phases
 app.use("/api/users", userRoutes);
-// app.use("/api/services", serviceRoutes);
+app.use("/api/services", serviceRoutes);
 // app.use("/api/bookings", bookingRoutes);
 // app.use("/api/payments", paymentRoutes);
 
