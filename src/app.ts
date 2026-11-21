@@ -11,6 +11,7 @@ import userRoutes from "./modules/users/user.routes.js";
 import serviceRoutes from "./modules/services/service.routes.js";
 import bookingRoutes from "./modules/bookings/booking.routes.js";
 import paymentRoutes from "./modules/payments/payment.routes.js";
+import uploadRoutes from "./modules/upload/upload.routes.js";
 import { handleWebhook } from "./modules/payments/payment.controller.js";
 
 const app = express();
@@ -119,6 +120,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/services", serviceRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/upload", uploadRoutes);
 
 // Simple status endpoint for DB info (development only)
 app.get("/api/status", async (_req, res) => {
