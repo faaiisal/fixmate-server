@@ -1,6 +1,7 @@
 import app from "./app.js";
 import { env } from "./config/env.js";
-import { connectDB, closeDB } from "./config/db.js";
+import { connectDB, closeDB, getDb } from "./config/db.js";
+import { ensureIndexes } from "./config/indexes.js";
 
 async function startServer() {
   try {
@@ -10,7 +11,14 @@ async function startServer() {
     console.log(`📋 MONGODB_URI=${env.MONGODB_URI.replace(/:([^@]+)@/, ":****@")}`);
 
     // Connect to MongoDB once
-    await connectDB();
+    const { db } = await connectDB();
+
+    // Ensure indexes for 4 business collections (preserve data, idempotent)
+    try {
+      await ensureIndexes(db);
+    } catch (idxErr) {
+      console.warn("⚠️ Index creation warning (non-fatal):", (idxErr as Error).message);
+    }
 
     const server = app.listen(env.PORT, () => {
       console.log(`✅ Server listening on http://localhost:${env.PORT}`);

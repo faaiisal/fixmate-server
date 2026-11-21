@@ -8,6 +8,7 @@
     "start": "node dist/server.js",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "db:init": "tsx src/scripts/init-indexes.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
