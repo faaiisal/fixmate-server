@@ -1,4 +1,4 @@
-# Dependencies & Package Managers
+# Dependencies & Package Managers - NEVER push node_modules (85+ MB)
 node_modules/
 .pnp/
 .pnp.*
@@ -8,26 +8,27 @@ node_modules/
 !.yarn/releases
 !.yarn/versions
 
-# Production Build Output - Never push compiled JS
-/build
-/dist
-/.dist
-/out
+# Production Build Output - NEVER push compiled JS (regenerated via npm run build)
+build/
+dist/
+.next/
+out/
+.turbo/
 coverage/
 .nyc_output/
-.next/
+storybook-static/
 
-# Environment Variables - MUST NOT push to GitHub (secrets, DB URIs, API keys)
+# Environment Variables - MUST NOT push secrets (DB URIs, API keys, secrets)
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 .env.*.local
-# Allow example file with placeholders only
+# Allow example file with placeholders only - must be tracked
 !.env.example
 
-# Logs
+# Logs - Never push logs
 logs/
 *.log
 npm-debug.log*
@@ -36,28 +37,22 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# OS / Misc
+# OS & System Files - Never push OS junk
 .DS_Store
+.DS_Store?
 *.pem
 Thumbs.db
-.DS_Store?
 ehthumbs.db
 Icon?
 
-# Debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# Vercel
+# Deployment
 .vercel/
 
-# TypeScript
+# TypeScript Build Info
 *.tsbuildinfo
 next-env.d.ts
 
-# Editor Settings - Don't push personal editor configs (except extensions.json)
+# Editor Settings - Don't push personal editor configs (keep extensions.json)
 .vscode/*
 !.vscode/extensions.json
 .idea/
@@ -65,19 +60,13 @@ next-env.d.ts
 *.swo
 *~
 
-# Local-only design resources — DO NOT PUSH
+# Local-only Design Resources - DO NOT PUSH (private notes, local exports)
 fixmate-local/
 .stitch/
 .local-design/
 
-# Storybook
-storybook-static/
-
-# Testing
-/coverage
-coverage/
-.nyc_output/
-
-# Optional: Local database dumps, etc.
+# Optional: Local database dumps, large files - DO NOT PUSH
 *.dump
 *.sql
+*.sqlite
+*.db
