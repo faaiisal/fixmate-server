@@ -3,6 +3,7 @@ import { getDb } from "../../config/db.js";
 import { COLLECTIONS } from "../../config/collections.js";
 import { AppError } from "../../utils/api-response.js";
 import { UserDocument, UserRole, UpdateUserInput, AdminUpdateUserRoleInput } from "./user.interface.js";
+import { escapeRegExp } from "../../utils/escape-regexp.js";
 
 function toObjectId(id: string): ObjectId {
   if (!ObjectId.isValid(id)) {
@@ -106,7 +107,7 @@ export async function listUsers(options: ListUsersOptions) {
     filter.role = options.role;
   }
   if (options.search) {
-    const regex = new RegExp(options.search.trim(), "i");
+    const regex = new RegExp(escapeRegExp(options.search.trim()), "i");
     filter.$or = [{ name: regex }, { email: regex }];
   }
 

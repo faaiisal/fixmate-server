@@ -6,7 +6,8 @@ import { notFoundMiddleware } from "./middlewares/not-found.middleware.js";
 import { errorMiddleware } from "./middlewares/error.middleware.js";
 import { successResponse } from "./utils/api-response.js";
 import { getCollectionsInfo, getDb } from "./config/db.js";
-import { authMiddleware } from "./middlewares/auth.middleware.js";
+import { authMiddleware, requireAuth } from "./middlewares/auth.middleware.js";
+import { roleMiddleware } from "./middlewares/role.middleware.js";
 import userRoutes from "./modules/users/user.routes.js";
 import serviceRoutes from "./modules/services/service.routes.js";
 import bookingRoutes from "./modules/bookings/booking.routes.js";
@@ -16,16 +17,42 @@ import { handleWebhook } from "./modules/payments/payment.controller.js";
 
 const app = express();
 
+// Trust proxy for Vercel / reverse proxy — needed for req.ip but do not trust arbitrary headers blindly
+// Set to 1 to trust first proxy (Vercel), our rate limiter validates XFF format
+app.set("trust proxy", 1);
+
+// Security headers — manual implementation without helmet dependency (Phase 2)
+// If helmet is installed, prefer helmet, but this works without external package
+import { securityHeadersMiddleware } from "./middlewares/security-headers.middleware.js";
+import {
+  generalRateLimiter,
+  sensitiveRateLimiter,
+  uploadRateLimiter,
+} from "./middlewares/rate-limit.middleware.js";
+
+app.use(securityHeadersMiddleware);
+
 // CORS — restricted to explicitly configured trusted frontend origins only
 // CLIENT_URL can be a single URL or comma-separated list of trusted origins for production
-const rawClientUrls = env.CLIENT_URL ? env.CLIENT_URL.split(",").map((u) => u.trim()).filter(Boolean) : [];
-const allowedOrigins = [
-  ...rawClientUrls,
-  "http://localhost:3000",
-  "http://127.0.0.1:3000",
-  "http://localhost:8000",
-  "http://127.0.0.1:8000",
-].filter(Boolean);
+// Example: CLIENT_URL=https://fixmate-psi.vercel.app,https://fixmate-server-snowy.vercel.app
+// For production, only CLIENT_URL is allowed. For development, localhost is also allowed.
+const rawClientUrls = env.CLIENT_URL
+  ? env.CLIENT_URL.split(",")
+      .map((u) => u.trim())
+      .filter(Boolean)
+  : [];
+
+// Phase 2 Fix: Production allows only explicitly configured origins, development also allows localhost
+const allowedOrigins =
+  env.NODE_ENV === "production"
+    ? [...rawClientUrls]
+    : [
+        ...rawClientUrls,
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+      ].filter(Boolean);
 
 app.use(
   cors({
@@ -51,20 +78,36 @@ app.use(
   })
 );
 
-// Stripe webhook needs raw body — mount BEFORE json parser
+// Stripe webhook needs raw body — mount BEFORE json parser and BEFORE rate limiting (webhook verified via signature)
 app.post(
   "/api/payments/webhook",
   express.raw({ type: "application/json" }),
   handleWebhook as any
 );
 
-// Body parsers
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+// Body parsers — Phase 2 Fix: Reduce JSON limit from 10mb to 100kb (sufficient for booking/profile/service requests)
+// Multipart image upload limit (5MB) is separate via multer memoryStorage and fileFilter, not affected by JSON limit
+app.use(express.json({ limit: "100kb" }));
+app.use(express.urlencoded({ extended: true, limit: "100kb" }));
 app.use(cookieParser());
 
 // Auth middleware — populates req.user if valid BetterAuth session present (does not block public routes)
 app.use(authMiddleware);
+
+// Rate limiting — general for all API routes (100 req / 15min)
+// Health and root are excluded from general limiter for deployment checks
+// Sensitive routes have stricter limits applied in their routers
+app.use("/api", (req, res, next) => {
+  // Skip rate limiting for health check (deployment)
+  if (req.path === "/health" || req.path === "/api/health") {
+    return next();
+  }
+  return generalRateLimiter(req, res, next);
+});
+
+// Specific stricter rate limits for sensitive operations
+app.use("/api/upload", uploadRateLimiter);
+app.use("/api/payments/create-checkout-session", sensitiveRateLimiter);
 
 // Root
 app.get("/", (_req, res) => {
@@ -79,23 +122,17 @@ app.get("/", (_req, res) => {
   );
 });
 
-// Health endpoint — required by Phase 3
+// Health endpoint — required by deployment, public minimal info (no DB name, no collections counts)
 app.get("/api/health", async (_req, res) => {
   try {
     const db = getDb();
     const ping = await db.command({ ping: 1 });
-    const collections = await getCollectionsInfo();
 
     res.json(
       successResponse("Health check passed", {
         status: "ok",
         uptime: process.uptime(),
         timestamp: new Date().toISOString(),
-        database: {
-          name: env.DB_NAME,
-          ping: ping.ok === 1 ? "ok" : "failed",
-          collections,
-        },
         services: {
           api: "up",
           mongodb: ping.ok === 1 ? "up" : "down",
@@ -112,10 +149,9 @@ app.get("/api/health", async (_req, res) => {
         status: "error",
         uptime: process.uptime(),
         timestamp: new Date().toISOString(),
-        database: {
-          name: env.DB_NAME,
-          ping: "failed",
-          error: error.message,
+        services: {
+          api: "up",
+          mongodb: "down",
         },
       },
     });
@@ -129,26 +165,31 @@ app.use("/api/bookings", bookingRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/upload", uploadRoutes);
 
-// Simple status endpoint for DB info (development only)
-app.get("/api/status", async (_req, res) => {
-  try {
-    const collections = await getCollectionsInfo();
-    res.json(
-      successResponse("System status", {
-        env: env.NODE_ENV,
-        db: env.DB_NAME,
-        collections,
-        time: new Date().toISOString(),
-      })
-    );
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: "Failed to get status",
-      error: (err as Error).message,
-    });
+// Detailed status endpoint — protected, admin only (exposes operational diagnostics)
+app.get(
+  "/api/status",
+  requireAuth,
+  roleMiddleware("admin"),
+  async (_req, res) => {
+    try {
+      const collections = await getCollectionsInfo();
+      res.json(
+        successResponse("System status", {
+          env: env.NODE_ENV,
+          db: env.DB_NAME,
+          collections,
+          time: new Date().toISOString(),
+        })
+      );
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        message: "Failed to get status",
+        error: (err as Error).message,
+      });
+    }
   }
-});
+);
 
 // Not found + error middlewares (must be last)
 app.use(notFoundMiddleware);

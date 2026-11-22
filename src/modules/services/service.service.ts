@@ -9,6 +9,8 @@ import {
   ApprovalStatus,
   ServiceCategory,
 } from "./service.interface.js";
+import { escapeRegExp } from "../../utils/escape-regexp.js";
+import { normalizeServiceMode, buildServiceModeFilter } from "../../utils/mapping.js";
 
 function toObjectId(id: string): ObjectId {
   if (!ObjectId.isValid(id)) {
@@ -82,6 +84,16 @@ export async function createService(
     throw new AppError("Base price must be positive", 400);
   }
 
+  // Phase 2: Normalize serviceMode assignment terminology to internal canonical
+  // Home Visit -> doorstep, Shop Drop-off -> workshop, both stays both
+  // Keep existing values intact, map new ones
+  if (input.serviceMode) {
+    const normalized = normalizeServiceMode(input.serviceMode);
+    if (normalized) {
+      input.serviceMode = normalized as any;
+    }
+  }
+
   const now = new Date();
   const doc: Omit<ServiceDocument, "_id"> = {
     technicianId: techOid,
@@ -123,12 +135,15 @@ export async function getPublicServices(options: ListServicesOptions) {
     filter.serviceArea = { $regex: options.serviceArea, $options: "i" };
   }
   if (options.serviceMode) {
-    filter.serviceMode = options.serviceMode;
+    const modeFilter = buildServiceModeFilter(options.serviceMode);
+    if (modeFilter) {
+      filter.serviceMode = modeFilter;
+    }
   }
   if (options.search) {
     // Use text search if available, else regex
-    // For simplicity use regex on title/description
-    const regex = new RegExp(options.search.trim(), "i");
+    // For simplicity use regex on title/description - escaped to prevent ReDoS
+    const regex = new RegExp(escapeRegExp(options.search.trim()), "i");
     filter.$or = [{ title: regex }, { description: regex }];
   }
 
@@ -189,7 +204,7 @@ export async function getMyServices(
   if (options.approvalStatus) filter.approvalStatus = options.approvalStatus;
   if (options.category) filter.category = options.category;
   if (options.search) {
-    const regex = new RegExp(options.search.trim(), "i");
+    const regex = new RegExp(escapeRegExp(options.search.trim()), "i");
     filter.$or = [{ title: regex }, { description: regex }];
   }
 
@@ -248,7 +263,10 @@ export async function updateOwnService(
     updateFields.basePrice = input.basePrice;
   }
   if (input.estimatedDuration !== undefined) updateFields.estimatedDuration = input.estimatedDuration;
-  if (input.serviceMode !== undefined) updateFields.serviceMode = input.serviceMode;
+  if (input.serviceMode !== undefined) {
+    const normalized = normalizeServiceMode(input.serviceMode);
+    updateFields.serviceMode = normalized || input.serviceMode;
+  }
   if (input.serviceArea !== undefined) updateFields.serviceArea = input.serviceArea;
   if (input.image !== undefined) updateFields.image = input.image;
   if (input.images !== undefined) updateFields.images = input.images;
@@ -333,7 +351,7 @@ export async function adminListPending(options: ListServicesOptions) {
   const filter: any = { approvalStatus: "pending" };
   if (options.category) filter.category = options.category;
   if (options.search) {
-    const regex = new RegExp(options.search.trim(), "i");
+    const regex = new RegExp(escapeRegExp(options.search.trim()), "i");
     filter.$or = [{ title: regex }, { description: regex }];
   }
 
@@ -392,7 +410,7 @@ export async function adminListAll(options: ListServicesOptions) {
     filter.technicianId = toObjectId(options.technicianId);
   }
   if (options.search) {
-    const regex = new RegExp(options.search.trim(), "i");
+    const regex = new RegExp(escapeRegExp(options.search.trim()), "i");
     filter.$or = [{ title: regex }, { description: regex }];
   }
 

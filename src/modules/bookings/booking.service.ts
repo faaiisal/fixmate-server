@@ -11,6 +11,8 @@ import {
 } from "./booking.interface.js";
 import { ServiceDocument } from "../services/service.interface.js";
 import { UserDocument } from "../users/user.interface.js";
+import { escapeRegExp } from "../../utils/escape-regexp.js";
+import { normalizePaymentStatus } from "../../utils/mapping.js";
 
 function toObjectId(id: string): ObjectId {
   if (!ObjectId.isValid(id)) {
@@ -23,7 +25,7 @@ export interface ListBookingsOptions {
   page?: number;
   limit?: number;
   status?: BookingStatus;
-  paymentStatus?: "pending" | "paid" | "failed";
+  paymentStatus?: "pending" | "paid" | "failed" | "unpaid";
   serviceId?: string;
   customerId?: string;
   technicianId?: string;
@@ -177,10 +179,13 @@ export async function getCustomerBookings(
 
   const filter: any = { customerId: customerOid };
   if (options.status) filter.status = options.status;
-  if (options.paymentStatus) filter.paymentStatus = options.paymentStatus;
+  if (options.paymentStatus) {
+    const normalized = normalizePaymentStatus(options.paymentStatus);
+    if (normalized) filter.paymentStatus = normalized;
+  }
   if (options.serviceId) filter.serviceId = toObjectId(options.serviceId);
   if (options.search) {
-    const regex = new RegExp(options.search.trim(), "i");
+    const regex = new RegExp(escapeRegExp(options.search.trim()), "i");
     filter.$or = [{ problemDescription: regex }, { customerName: regex }];
   }
 
@@ -212,9 +217,12 @@ export async function getTechnicianBookings(
 
   const filter: any = { technicianId: techOid };
   if (options.status) filter.status = options.status;
-  if (options.paymentStatus) filter.paymentStatus = options.paymentStatus;
+  if (options.paymentStatus) {
+    const normalized = normalizePaymentStatus(options.paymentStatus);
+    if (normalized) filter.paymentStatus = normalized;
+  }
   if (options.search) {
-    const regex = new RegExp(options.search.trim(), "i");
+    const regex = new RegExp(escapeRegExp(options.search.trim()), "i");
     filter.$or = [{ problemDescription: regex }, { customerName: regex }];
   }
 
@@ -242,12 +250,15 @@ export async function adminListBookings(options: ListBookingsOptions) {
 
   const filter: any = {};
   if (options.status) filter.status = options.status;
-  if (options.paymentStatus) filter.paymentStatus = options.paymentStatus;
+  if (options.paymentStatus) {
+    const normalized = normalizePaymentStatus(options.paymentStatus);
+    if (normalized) filter.paymentStatus = normalized;
+  }
   if (options.serviceId) filter.serviceId = toObjectId(options.serviceId);
   if (options.customerId) filter.customerId = toObjectId(options.customerId);
   if (options.technicianId) filter.technicianId = toObjectId(options.technicianId);
   if (options.search) {
-    const regex = new RegExp(options.search.trim(), "i");
+    const regex = new RegExp(escapeRegExp(options.search.trim()), "i");
     filter.$or = [
       { customerName: regex },
       { customerEmail: regex },

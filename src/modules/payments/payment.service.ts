@@ -5,6 +5,8 @@ import { AppError } from "../../utils/api-response.js";
 import { env } from "../../config/env.js";
 import { PaymentDocument } from "./payment.interface.js";
 import { BookingDocument } from "../bookings/booking.interface.js";
+import { escapeRegExp } from "../../utils/escape-regexp.js";
+import { normalizePaymentStatus } from "../../utils/mapping.js";
 import Stripe from "stripe";
 
 function toObjectId(id: string): ObjectId {
@@ -464,9 +466,13 @@ export async function getAllTransactions(options: {
   const skip = (page - 1) * limit;
 
   const filter: any = {};
-  if (options.paymentStatus) filter.paymentStatus = options.paymentStatus;
+  if (options.paymentStatus) {
+    const normalized = normalizePaymentStatus(options.paymentStatus);
+    if (normalized) filter.paymentStatus = normalized;
+    else filter.paymentStatus = options.paymentStatus;
+  }
   if (options.search) {
-    const regex = new RegExp(options.search.trim(), "i");
+    const regex = new RegExp(escapeRegExp(options.search.trim()), "i");
     filter.$or = [{ transactionId: regex }, { sessionId: regex }];
   }
 
