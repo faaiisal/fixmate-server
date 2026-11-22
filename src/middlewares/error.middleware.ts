@@ -31,6 +31,23 @@ export const errorMiddleware = (
     message = `Duplicate field: ${field}`;
   }
 
+  // Multer errors (file upload)
+  if (err.code === "LIMIT_FILE_SIZE") {
+    statusCode = 400;
+    message = `File too large. Maximum allowed is 5MB`;
+  }
+
+  if (err.code === "LIMIT_UNEXPECTED_FILE" || err.code === "LIMIT_FILE_COUNT") {
+    statusCode = 400;
+    message = `Invalid file upload: ${err.message}`;
+  }
+
+  // Multer fileFilter errors (invalid type)
+  if (err.message && err.message.includes("Invalid file type")) {
+    statusCode = 400;
+    message = err.message;
+  }
+
   // AppError instance
   if (err instanceof AppError) {
     statusCode = err.statusCode;
@@ -46,6 +63,14 @@ export const errorMiddleware = (
   if (err.name === "BSONError" || message.toLowerCase().includes("objectid")) {
     statusCode = 400;
     message = "Invalid ID format";
+  }
+
+  // Never expose internal server errors or secrets in production
+  // Ensure API keys, secrets, DB URIs are not in error messages
+  if (env.NODE_ENV === "production") {
+    // Scrub any potential secrets from message
+    message = message.replace(/key=[^&\s]+/gi, "key=***");
+    message = message.replace(/mongodb\+srv:\/\/[^@]+@/gi, "mongodb+srv://***@");
   }
 
   res.status(statusCode).json(
