@@ -97,6 +97,8 @@ export async function createService(
   const now = new Date();
   const doc: Omit<ServiceDocument, "_id"> = {
     technicianId: techOid,
+    technicianName: (techUser as any).name, // denormalized snapshot per spec
+    technicianEmail: (techUser as any).email, // denormalized snapshot per spec
     title: input.title.trim(),
     category: input.category,
     description: input.description.trim(),

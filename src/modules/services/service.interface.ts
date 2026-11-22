@@ -20,6 +20,8 @@ export type ServiceMode = "doorstep" | "workshop" | "both";
 export interface ServiceDocument {
   _id: ObjectId;
   technicianId: ObjectId;
+  technicianName?: string; // denormalized snapshot per spec
+  technicianEmail?: string; // denormalized snapshot per spec
   title: string;
   category: ServiceCategory;
   description: string;

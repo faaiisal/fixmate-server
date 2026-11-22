@@ -110,16 +110,36 @@ export async function createBooking(
     customerName: (customerUser as any).name,
     customerEmail: (customerUser as any).email,
     phone: input.phone.trim(),
+    customerPhone: input.phone.trim(), // alias per spec
     address: input.address.trim(),
     preferredDate,
     problemDescription: input.problemDescription.trim(),
     status: "requested",
     basePrice: service.basePrice,
-    finalAmount: undefined,
-    paymentStatus: "pending",
+    finalAmount: service.basePrice, // default basePrice per spec, set to undefined previously but spec says default basePrice
+    paymentStatus: "pending", // internal pending = assignment unpaid
+    // Denormalized snapshots per spec — additive, preserves if service edited/deleted later
+    serviceTitle: service.title,
+    serviceImage: service.image,
+    category: service.category,
+    technicianName: (service as any).technicianName || undefined,
+    technicianEmail: (service as any).technicianEmail || undefined,
     createdAt: now,
     updatedAt: now,
   };
+
+  // If service doesn't have technicianName/Email denormalized (legacy), fetch technician user
+  if (!booking.technicianName || !booking.technicianEmail) {
+    try {
+      const techUser = await db.collection(COLLECTIONS.USERS).findOne({ _id: service.technicianId as never } as any);
+      if (techUser) {
+        booking.technicianName = (techUser as any).name || booking.technicianName;
+        booking.technicianEmail = (techUser as any).email || booking.technicianEmail;
+      }
+    } catch {
+      // ignore, keep undefined
+    }
+  }
 
   try {
     const result = await db.collection(COLLECTIONS.BOOKINGS).insertOne(booking as any);

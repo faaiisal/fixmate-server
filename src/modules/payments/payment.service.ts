@@ -128,9 +128,16 @@ export async function createCheckoutSession(
       currency,
       paymentProvider: "stripe",
       sessionId: mockSessionId,
+      stripeSessionId: mockSessionId, // alias per spec assignment
       transactionId: undefined,
       paymentStatus: "pending",
       createdAt: now,
+      // Denormalized snapshots per spec — additive
+      serviceTitle: (booking as any).serviceTitle || `Booking ${bookingId}`,
+      customerName: (booking as any).customerName,
+      customerEmail: (booking as any).customerEmail,
+      technicianName: (booking as any).technicianName,
+      technicianEmail: (booking as any).technicianEmail,
     };
 
     // Upsert: if existing pending payment exists, update it, else insert
@@ -138,7 +145,20 @@ export async function createCheckoutSession(
     if (existingPayment) {
       await db.collection(COLLECTIONS.PAYMENTS).updateOne(
         { _id: existingPayment._id } as any,
-        { $set: { sessionId: mockSessionId, amount, currency, paymentStatus: "pending" as const } }
+        {
+          $set: {
+            sessionId: mockSessionId,
+            stripeSessionId: mockSessionId,
+            amount,
+            currency,
+            paymentStatus: "pending" as const,
+            serviceTitle: (booking as any).serviceTitle,
+            customerName: (booking as any).customerName,
+            customerEmail: (booking as any).customerEmail,
+            technicianName: (booking as any).technicianName,
+            technicianEmail: (booking as any).technicianEmail,
+          },
+        }
       );
       paymentId = existingPayment._id;
     } else {
@@ -195,16 +215,34 @@ export async function createCheckoutSession(
       currency,
       paymentProvider: "stripe",
       sessionId: session.id,
+      stripeSessionId: session.id, // alias per spec
       transactionId: undefined,
       paymentStatus: "pending",
       createdAt: now,
+      serviceTitle: (booking as any).serviceTitle || `Booking ${bookingId}`,
+      customerName: (booking as any).customerName,
+      customerEmail: (booking as any).customerEmail,
+      technicianName: (booking as any).technicianName,
+      technicianEmail: (booking as any).technicianEmail,
     };
 
     let paymentId: ObjectId;
     if (existingPayment) {
       await db.collection(COLLECTIONS.PAYMENTS).updateOne(
         { _id: existingPayment._id } as any,
-        { $set: { sessionId: session.id, amount, currency } }
+        {
+          $set: {
+            sessionId: session.id,
+            stripeSessionId: session.id,
+            amount,
+            currency,
+            serviceTitle: (booking as any).serviceTitle,
+            customerName: (booking as any).customerName,
+            customerEmail: (booking as any).customerEmail,
+            technicianName: (booking as any).technicianName,
+            technicianEmail: (booking as any).technicianEmail,
+          },
+        }
       );
       paymentId = existingPayment._id;
     } else {
