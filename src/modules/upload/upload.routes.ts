@@ -1,6 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import { requireAuth } from "../../middlewares/auth.middleware.js";
+import { verifyToken } from "../../middlewares/verify.middleware.js";
 import * as uploadController from "./upload.controller.js";
 
 const router = Router();
@@ -21,9 +21,10 @@ const upload = multer({
 });
 
 // POST /api/upload/image — authenticated users (customer, technician, admin) can upload profile/service images
+// Per Phase 2 security: stricter rate limit applied in app.ts uploadRateLimiter
 router.post(
   "/image",
-  requireAuth,
+  verifyToken,
   upload.single("image"),
   uploadController.uploadImage
 );
