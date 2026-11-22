@@ -58,8 +58,6 @@ PORT=5000
 NODE_ENV=development
 MONGODB_URI=your_mongodb_connection_string
 DB_NAME=fixmate
-CLIENT_URL=http://localhost:3000
-```
 
 Add any additional authentication or payment variables required by your implementation.
 
