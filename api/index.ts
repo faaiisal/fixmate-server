@@ -1,10 +1,12 @@
 import app from "../src/app.js";
 import { connectDB } from "../src/config/db.js";
 import { ensureIndexes } from "../src/config/indexes.js";
+import { startUserRoleWatcher, auditExistingUsers } from "../src/config/user-role-watcher.js";
 
 // Cached connection flag for serverless - Vercel reuses function instances
 let isConnected = false;
 let isIndexEnsured = false;
+let isWatcherStarted = false;
 
 export default async function handler(req: any, res: any) {
   try {
@@ -23,6 +25,18 @@ export default async function handler(req: any, res: any) {
           console.log("✅ Indexes ensured for serverless");
         } catch (idxErr: any) {
           console.warn("⚠️ Index creation warning (non-fatal):", idxErr.message);
+        }
+      }
+
+      // Phase 1 Critical Security: Start user role watcher (non-blocking, best effort in serverless)
+      if (!isWatcherStarted) {
+        try {
+          await auditExistingUsers();
+          await startUserRoleWatcher();
+          isWatcherStarted = true;
+          console.log("✅ User role watcher started for serverless");
+        } catch (watcherErr: any) {
+          console.warn("⚠️ User role watcher failed to start in serverless (non-fatal):", watcherErr.message);
         }
       }
     }

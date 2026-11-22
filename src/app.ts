@@ -16,9 +16,11 @@ import { handleWebhook } from "./modules/payments/payment.controller.js";
 
 const app = express();
 
-// CORS — restricted to actual frontend origin, but allow Vercel deployments
+// CORS — restricted to explicitly configured trusted frontend origins only
+// CLIENT_URL can be a single URL or comma-separated list of trusted origins for production
+const rawClientUrls = env.CLIENT_URL ? env.CLIENT_URL.split(",").map((u) => u.trim()).filter(Boolean) : [];
 const allowedOrigins = [
-  env.CLIENT_URL,
+  ...rawClientUrls,
   "http://localhost:3000",
   "http://127.0.0.1:3000",
   "http://localhost:8000",
@@ -33,25 +35,14 @@ app.use(
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
-      // In development, allow any localhost with any port
+      // In development, allow any localhost with any port for local testing
       if (env.NODE_ENV === "development" && origin.startsWith("http://localhost:")) {
         return callback(null, true);
       }
-      // Allow any Vercel deployment (frontend may be on vercel.app)
-      if (origin.endsWith(".vercel.app") || origin.includes("vercel.app")) {
-        return callback(null, true);
-      }
-      // Allow production frontend if CLIENT_URL is set to vercel URL or custom domain
-      // Also allow any https origin in production if CLIENT_URL not strictly enforced (for flexibility)
-      if (env.NODE_ENV === "production") {
-        // If CLIENT_URL is set, we already checked allowedOrigins above
-        // Additionally allow any https origin for Vercel preview deployments
-        // You can tighten this later to specific domains
-        if (origin.startsWith("https://")) {
-          return callback(null, true);
-        }
-      }
-      console.warn(`CORS blocked origin: ${origin}`);
+      // In production, only allow explicitly trusted origins — no unrestricted https:// allowance
+      // Trusted origins must be configured via CLIENT_URL env var (single or comma-separated list)
+      // Example: CLIENT_URL=https://fixmate-psi.vercel.app,https://fixmate-server-snowy.vercel.app
+      console.warn(`CORS blocked origin: ${origin} - Not in trusted list: ${allowedOrigins.join(", ")}`);
       return callback(new Error(`CORS policy: origin ${origin} not allowed`), false);
     },
     credentials: true,

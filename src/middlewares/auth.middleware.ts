@@ -120,12 +120,18 @@ export const authMiddleware = async (
     // 1. Try to find session by token (real BetterAuth flow)
     let sessionDoc = await db.collection(COLLECTIONS.SESSIONS).findOne({ token });
 
-    // If not found and token looks like ObjectId, it might be a direct userId for dev
+    // DEVELOPMENT ONLY fallback: Allow Bearer userId for testing seeded users
+    // MUST NEVER work in production - production must require valid BetterAuth session
     if (!sessionDoc && ObjectId.isValid(token)) {
+      // Restrict to development environment only
+      const isDevelopment = process.env.NODE_ENV === "development" || process.env.NODE_ENV !== "production";
+      if (!isDevelopment) {
+        console.warn(`⚠️ Dev auth fallback attempted in production for token ${token.substring(0, 8)}... - BLOCKED`);
+        return next(); // Block fallback in production - require real session
+      }
+
       // Try direct user lookup as fallback for development / seeded testing
-      // Check if token is actually a userId (dev mode)
-      // We will treat this as authenticated ONLY if session not found and NODE_ENV is development
-      // This allows testing with: Authorization: Bearer <userId>
+      // This allows testing with: Authorization: Bearer <userId> in development only
       const userId = token;
       try {
         const objectId = new ObjectId(userId);
@@ -136,7 +142,8 @@ export const authMiddleware = async (
           userDoc = await db.collection(COLLECTIONS.USERS).findOne({ _id: userId as never });
         }
         if (userDoc) {
-          // Dev fallback — do NOT require expiration
+          // Dev fallback — do NOT require expiration, but log warning
+          console.warn(`⚠️ DEV ONLY: Using userId fallback auth for user ${userId} - This must NOT work in production`);
           const docId = userDoc._id as unknown as string | ObjectId;
           const oid = typeof docId === "string" ? new ObjectId(docId) : (docId as ObjectId);
           req.user = {
