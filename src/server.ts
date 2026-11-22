@@ -63,4 +63,10 @@ async function startServer() {
   }
 }
 
-startServer();
+// Only auto-start when not in Vercel serverless environment
+// Vercel will use api/index.ts which imports app directly without listening
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export default app;

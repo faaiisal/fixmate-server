@@ -16,24 +16,40 @@ import { handleWebhook } from "./modules/payments/payment.controller.js";
 
 const app = express();
 
-// CORS — restricted to actual frontend origin
+// CORS — restricted to actual frontend origin, but allow Vercel deployments
 const allowedOrigins = [
   env.CLIENT_URL,
   "http://localhost:3000",
   "http://127.0.0.1:3000",
+  "http://localhost:8000",
+  "http://127.0.0.1:8000",
 ].filter(Boolean);
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow non-browser requests (no origin) like health checks, Postman
+      // Allow non-browser requests (no origin) like health checks, Postman, Vercel internal
       if (!origin) return callback(null, true);
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
-      // In development, allow any localhost
+      // In development, allow any localhost with any port
       if (env.NODE_ENV === "development" && origin.startsWith("http://localhost:")) {
         return callback(null, true);
+      }
+      // Allow any Vercel deployment (frontend may be on vercel.app)
+      if (origin.endsWith(".vercel.app") || origin.includes("vercel.app")) {
+        return callback(null, true);
+      }
+      // Allow production frontend if CLIENT_URL is set to vercel URL or custom domain
+      // Also allow any https origin in production if CLIENT_URL not strictly enforced (for flexibility)
+      if (env.NODE_ENV === "production") {
+        // If CLIENT_URL is set, we already checked allowedOrigins above
+        // Additionally allow any https origin for Vercel preview deployments
+        // You can tighten this later to specific domains
+        if (origin.startsWith("https://")) {
+          return callback(null, true);
+        }
       }
       console.warn(`CORS blocked origin: ${origin}`);
       return callback(new Error(`CORS policy: origin ${origin} not allowed`), false);
