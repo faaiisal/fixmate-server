@@ -86,6 +86,10 @@ export async function createCheckoutSession(
       // For simplicity, we will delete pending and create new, or reuse.
       // Let's reuse: return existing mock URL
       if (existingPayment.sessionId.startsWith("mock_")) {
+        // Phase 7: Fail-closed in production even for existing mock pending payments
+        if (env.NODE_ENV === "production") {
+          throw new AppError("Stripe not configured — payments disabled in production. Set STRIPE_SECRET_KEY.", 503);
+        }
         return {
           url: `${env.CLIENT_URL}/payment/success?session_id=${existingPayment.sessionId}&booking_id=${bookingId}`,
           sessionId: existingPayment.sessionId,
@@ -115,8 +119,12 @@ export async function createCheckoutSession(
   const now = new Date();
 
   if (!stripe) {
-    // Mock mode — since STRIPE_SECRET_KEY is placeholder, report missing but still allow mock checkout for testing
-    console.warn("⚠️ Stripe not configured (using placeholder keys) — creating mock checkout session");
+    // Phase 7: Fail-closed in production if Stripe not configured — prevent free services
+    if (env.NODE_ENV === "production") {
+      throw new AppError("Stripe not configured — payments disabled in production. Set STRIPE_SECRET_KEY.", 503);
+    }
+    // Mock mode — since STRIPE_SECRET_KEY is placeholder, allow mock checkout for testing in development
+    console.warn("⚠️ Stripe not configured (using placeholder keys) — creating mock checkout session (development only)");
 
     const mockSessionId = `mock_${new ObjectId().toString()}_${Date.now()}`;
 
