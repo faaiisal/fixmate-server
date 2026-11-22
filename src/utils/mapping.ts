@@ -88,3 +88,33 @@ export function isUnpaidStatus(status: string): boolean {
 export function isPaidStatus(status: string): boolean {
   return normalizePaymentStatus(status) === "paid";
 }
+
+// Category mapping for Challenge 1: AC, TV, Laptop aliases
+// Backend canonical: Smartphone, Laptop & PC, Air Conditioner, Refrigerator, Television, Washing Machine, Electrical Appliances, Other
+// Aliases: AC -> Air Conditioner, TV -> Television, Laptop -> Laptop & PC, etc.
+const CATEGORY_MAP: Record<string, string> = {
+  "ac": "Air Conditioner",
+  "air conditioner": "Air Conditioner",
+  "air conditioners": "Air Conditioner",
+  "television": "Television",
+  "tv": "Television",
+  "tvs": "Television",
+  "laptop": "Laptop & PC",
+  "laptop & pc": "Laptop & PC",
+  "laptops": "Laptop & PC",
+  "smartphone": "Smartphone",
+  "smartphones": "Smartphone",
+  "refrigerator": "Refrigerator",
+  "washing machine": "Washing Machine",
+  "washing machines": "Washing Machine",
+  "electrical": "Electrical Appliances",
+  "electrical appliances": "Electrical Appliances",
+  "kitchen & water": "Electrical Appliances",
+  "other": "Other",
+};
+
+export function normalizeCategory(input?: string | null): string | undefined {
+  if (!input) return undefined;
+  const key = input.trim().toLowerCase();
+  return CATEGORY_MAP[key] || input; // fallback to original if not mapped
+}

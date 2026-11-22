@@ -10,7 +10,11 @@ import {
   ServiceCategory,
 } from "./service.interface.js";
 import { escapeRegExp } from "../../utils/escape-regexp.js";
-import { normalizeServiceMode, buildServiceModeFilter } from "../../utils/mapping.js";
+import {
+  normalizeServiceMode,
+  buildServiceModeFilter,
+  normalizeCategory,
+} from "../../utils/mapping.js";
 
 function toObjectId(id: string): ObjectId {
   if (!ObjectId.isValid(id)) {
@@ -131,7 +135,8 @@ export async function getPublicServices(options: ListServicesOptions) {
   };
 
   if (options.category) {
-    filter.category = options.category;
+    const normalizedCat = normalizeCategory(options.category);
+    if (normalizedCat) filter.category = normalizedCat;
   }
   if (options.serviceArea) {
     filter.serviceArea = { $regex: options.serviceArea, $options: "i" };
@@ -204,7 +209,10 @@ export async function getMyServices(
 
   const filter: any = { technicianId: techOid };
   if (options.approvalStatus) filter.approvalStatus = options.approvalStatus;
-  if (options.category) filter.category = options.category;
+  if (options.category) {
+    const normalizedCat = normalizeCategory(options.category);
+    if (normalizedCat) filter.category = normalizedCat;
+  }
   if (options.search) {
     const regex = new RegExp(escapeRegExp(options.search.trim()), "i");
     filter.$or = [{ title: regex }, { description: regex }];
@@ -351,7 +359,10 @@ export async function adminListPending(options: ListServicesOptions) {
   const skip = (page - 1) * limit;
 
   const filter: any = { approvalStatus: "pending" };
-  if (options.category) filter.category = options.category;
+  if (options.category) {
+    const normalizedCat = normalizeCategory(options.category);
+    if (normalizedCat) filter.category = normalizedCat;
+  }
   if (options.search) {
     const regex = new RegExp(escapeRegExp(options.search.trim()), "i");
     filter.$or = [{ title: regex }, { description: regex }];
@@ -407,7 +418,10 @@ export async function adminListAll(options: ListServicesOptions) {
 
   const filter: any = {};
   if (options.approvalStatus) filter.approvalStatus = options.approvalStatus;
-  if (options.category) filter.category = options.category;
+  if (options.category) {
+    const normalizedCat = normalizeCategory(options.category);
+    if (normalizedCat) filter.category = normalizedCat;
+  }
   if (options.technicianId) {
     filter.technicianId = toObjectId(options.technicianId);
   }
