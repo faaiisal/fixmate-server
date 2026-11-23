@@ -3,6 +3,7 @@ import { ObjectId } from "mongodb";
 import { getDb } from "../config/db.js";
 import { AppError } from "../utils/api-response.js";
 import { COLLECTIONS } from "../config/collections.js";
+import { env } from "../config/env.js";
 
 export interface AuthUser {
   _id: ObjectId;
@@ -120,12 +121,61 @@ export const authMiddleware = async (
     // 1. Try to find session by token (real BetterAuth flow)
     let sessionDoc = await db.collection(COLLECTIONS.SESSIONS).findOne({ token });
 
-    // If not found and token looks like ObjectId, it might be a direct userId for dev
+    // DEVELOPMENT ONLY fallback: Allow Bearer userId for testing seeded users
+    // MUST NEVER work in production - production must require valid BetterAuth session
+    // Phase 1 Fix: Requires explicit env flag AND NODE_ENV=development
     if (!sessionDoc && ObjectId.isValid(token)) {
+      // Strict check: only allowed when NODE_ENV=development AND ALLOW_USERID_BEARER=true
+      const isDevBypassAllowed =
+        env.NODE_ENV === "development" && env.ALLOW_USERID_BEARER === true;
+
+      if (!isDevBypassAllowed) {
+        if (env.NODE_ENV !== "development") {
+          console.warn(
+            `⚠️ Dev auth fallback attempted in production for token ${token.substring(0, 8)}... - BLOCKED`
+          );
+        } else {
+          console.warn(
+            `⚠️ Dev auth fallback attempted but ALLOW_USERID_BEARER=false - BLOCKED for token ${token.substring(0, 8)}...`
+          );
+        }
+        // Phase 1 Fix: Even when Bearer ObjectId is blocked, try cookie-based session (real BetterAuth flow)
+        // Frontend now uses credentials:include with cookie auth, Bearer is deprecated
+        const cookies = (req as any).cookies as Record<string, string> | undefined;
+        let cookieToken: string | null = null;
+        if (cookies) {
+          const possibleKeys = [
+            "better-auth.session_token",
+            "__Secure-better-auth.session_token",
+            "__Host-better-auth.session_token",
+            "better-auth.session-token",
+            "__Secure-better-auth.session-token",
+          ];
+          for (const key of possibleKeys) {
+            if (cookies[key]) {
+              cookieToken = cookies[key];
+              break;
+            }
+          }
+        }
+        if (cookieToken && cookieToken !== token) {
+          const cookieSession = await db
+            .collection(COLLECTIONS.SESSIONS)
+            .findOne({ token: cookieToken });
+          if (cookieSession) {
+            // Found valid session via cookie — use it
+            sessionDoc = cookieSession;
+          } else {
+            // No valid session via cookie either — continue unauthenticated
+            return next();
+          }
+        } else {
+          return next(); // Block fallback in production or when flag disabled
+        }
+      } else {
+
       // Try direct user lookup as fallback for development / seeded testing
-      // Check if token is actually a userId (dev mode)
-      // We will treat this as authenticated ONLY if session not found and NODE_ENV is development
-      // This allows testing with: Authorization: Bearer <userId>
+      // This allows testing with: Authorization: Bearer <userId> in development only
       const userId = token;
       try {
         const objectId = new ObjectId(userId);
@@ -136,7 +186,8 @@ export const authMiddleware = async (
           userDoc = await db.collection(COLLECTIONS.USERS).findOne({ _id: userId as never });
         }
         if (userDoc) {
-          // Dev fallback — do NOT require expiration
+          // Dev fallback — do NOT require expiration, but log warning
+          console.warn(`⚠️ DEV ONLY: Using userId fallback auth for user ${userId} - This must NOT work in production`);
           const docId = userDoc._id as unknown as string | ObjectId;
           const oid = typeof docId === "string" ? new ObjectId(docId) : (docId as ObjectId);
           req.user = {
@@ -159,6 +210,7 @@ export const authMiddleware = async (
         }
       } catch {
         // Ignore and continue to unauthorized handling
+      }
       }
     }
 

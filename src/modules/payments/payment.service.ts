@@ -5,6 +5,8 @@ import { AppError } from "../../utils/api-response.js";
 import { env } from "../../config/env.js";
 import { PaymentDocument } from "./payment.interface.js";
 import { BookingDocument } from "../bookings/booking.interface.js";
+import { escapeRegExp } from "../../utils/escape-regexp.js";
+import { normalizePaymentStatus } from "../../utils/mapping.js";
 import Stripe from "stripe";
 
 function toObjectId(id: string): ObjectId {
@@ -84,6 +86,10 @@ export async function createCheckoutSession(
       // For simplicity, we will delete pending and create new, or reuse.
       // Let's reuse: return existing mock URL
       if (existingPayment.sessionId.startsWith("mock_")) {
+        // Phase 7: Fail-closed in production even for existing mock pending payments
+        if (env.NODE_ENV === "production") {
+          throw new AppError("Stripe not configured — payments disabled in production. Set STRIPE_SECRET_KEY.", 503);
+        }
         return {
           url: `${env.CLIENT_URL}/payment/success?session_id=${existingPayment.sessionId}&booking_id=${bookingId}`,
           sessionId: existingPayment.sessionId,
@@ -113,8 +119,12 @@ export async function createCheckoutSession(
   const now = new Date();
 
   if (!stripe) {
-    // Mock mode — since STRIPE_SECRET_KEY is placeholder, report missing but still allow mock checkout for testing
-    console.warn("⚠️ Stripe not configured (using placeholder keys) — creating mock checkout session");
+    // Phase 7: Fail-closed in production if Stripe not configured — prevent free services
+    if (env.NODE_ENV === "production") {
+      throw new AppError("Stripe not configured — payments disabled in production. Set STRIPE_SECRET_KEY.", 503);
+    }
+    // Mock mode — since STRIPE_SECRET_KEY is placeholder, allow mock checkout for testing in development
+    console.warn("⚠️ Stripe not configured (using placeholder keys) — creating mock checkout session (development only)");
 
     const mockSessionId = `mock_${new ObjectId().toString()}_${Date.now()}`;
 
@@ -126,9 +136,16 @@ export async function createCheckoutSession(
       currency,
       paymentProvider: "stripe",
       sessionId: mockSessionId,
+      stripeSessionId: mockSessionId, // alias per spec assignment
       transactionId: undefined,
       paymentStatus: "pending",
       createdAt: now,
+      // Denormalized snapshots per spec — additive
+      serviceTitle: (booking as any).serviceTitle || `Booking ${bookingId}`,
+      customerName: (booking as any).customerName,
+      customerEmail: (booking as any).customerEmail,
+      technicianName: (booking as any).technicianName,
+      technicianEmail: (booking as any).technicianEmail,
     };
 
     // Upsert: if existing pending payment exists, update it, else insert
@@ -136,7 +153,20 @@ export async function createCheckoutSession(
     if (existingPayment) {
       await db.collection(COLLECTIONS.PAYMENTS).updateOne(
         { _id: existingPayment._id } as any,
-        { $set: { sessionId: mockSessionId, amount, currency, paymentStatus: "pending" as const } }
+        {
+          $set: {
+            sessionId: mockSessionId,
+            stripeSessionId: mockSessionId,
+            amount,
+            currency,
+            paymentStatus: "pending" as const,
+            serviceTitle: (booking as any).serviceTitle,
+            customerName: (booking as any).customerName,
+            customerEmail: (booking as any).customerEmail,
+            technicianName: (booking as any).technicianName,
+            technicianEmail: (booking as any).technicianEmail,
+          },
+        }
       );
       paymentId = existingPayment._id;
     } else {
@@ -193,16 +223,34 @@ export async function createCheckoutSession(
       currency,
       paymentProvider: "stripe",
       sessionId: session.id,
+      stripeSessionId: session.id, // alias per spec
       transactionId: undefined,
       paymentStatus: "pending",
       createdAt: now,
+      serviceTitle: (booking as any).serviceTitle || `Booking ${bookingId}`,
+      customerName: (booking as any).customerName,
+      customerEmail: (booking as any).customerEmail,
+      technicianName: (booking as any).technicianName,
+      technicianEmail: (booking as any).technicianEmail,
     };
 
     let paymentId: ObjectId;
     if (existingPayment) {
       await db.collection(COLLECTIONS.PAYMENTS).updateOne(
         { _id: existingPayment._id } as any,
-        { $set: { sessionId: session.id, amount, currency } }
+        {
+          $set: {
+            sessionId: session.id,
+            stripeSessionId: session.id,
+            amount,
+            currency,
+            serviceTitle: (booking as any).serviceTitle,
+            customerName: (booking as any).customerName,
+            customerEmail: (booking as any).customerEmail,
+            technicianName: (booking as any).technicianName,
+            technicianEmail: (booking as any).technicianEmail,
+          },
+        }
       );
       paymentId = existingPayment._id;
     } else {
@@ -250,13 +298,10 @@ export async function verifyPayment(
     throw new AppError("Payment session not found", 404);
   }
 
-  // Ownership check
+  // Phase 8D Fix: Ownership check — only customer who owns payment may verify
+  // Return 403 for another customer's payment, do not allow technician/admin
   if (payment.customerId.toString() !== customerOid.toString()) {
-    // Allow admin? For now only owner, but we check role in controller for admin override
-    // For simplicity, we check in service: if customerId mismatches, we still allow if admin? We'll enforce in controller
-    // Here we just check basic ownership, controller can bypass for admin via separate path
-    // For customer verification, must be own
-    // We'll not throw for admin case in service, but controller will handle
+    throw new AppError("Forbidden: You can only verify your own payments", 403);
   }
 
   if (payment.paymentStatus === "paid") {
@@ -464,9 +509,13 @@ export async function getAllTransactions(options: {
   const skip = (page - 1) * limit;
 
   const filter: any = {};
-  if (options.paymentStatus) filter.paymentStatus = options.paymentStatus;
+  if (options.paymentStatus) {
+    const normalized = normalizePaymentStatus(options.paymentStatus);
+    if (normalized) filter.paymentStatus = normalized;
+    else filter.paymentStatus = options.paymentStatus;
+  }
   if (options.search) {
-    const regex = new RegExp(options.search.trim(), "i");
+    const regex = new RegExp(escapeRegExp(options.search.trim()), "i");
     filter.$or = [{ transactionId: regex }, { sessionId: regex }];
   }
 

@@ -1,44 +1,42 @@
 import { Router } from "express";
-import { requireAuth } from "../../middlewares/auth.middleware.js";
-import { roleMiddleware } from "../../middlewares/role.middleware.js";
+import { verifyToken, verifyCustomer, verifyAdmin } from "../../middlewares/verify.middleware.js";
 import * as paymentController from "./payment.controller.js";
 
 const router = Router();
 
-// Customer routes
+// Customer routes — per Challenge 2: POST /api/payments/create-checkout-session is verifyToken, verifyCustomer
 router.post(
   "/create-checkout-session",
-  requireAuth,
-  roleMiddleware("customer"),
+  verifyToken,
+  verifyCustomer,
   paymentController.createCheckoutSession
 );
 
 router.get(
   "/verify",
-  requireAuth,
-  roleMiddleware("customer", "admin"),
+  verifyToken,
+  verifyCustomer,
   paymentController.verifyPayment
 );
 
 router.get(
   "/my-history",
-  requireAuth,
-  roleMiddleware("customer"),
+  verifyToken,
+  verifyCustomer,
   paymentController.getMyPaymentHistory
 );
 
 router.get(
   "/booking/:bookingId",
-  requireAuth,
-  roleMiddleware("customer", "technician", "admin"),
-  paymentController.getPaymentByBookingId
+  verifyToken,
+  paymentController.getPaymentByBookingId // ownership checks inside service for customer, technician, admin
 );
 
-// Admin routes
+// Admin routes — per Challenge 2: GET /api/admin/payments is verifyToken, verifyAdmin
 router.get(
   "/admin/transactions",
-  requireAuth,
-  roleMiddleware("admin"),
+  verifyToken,
+  verifyAdmin,
   paymentController.adminTransactions
 );
 

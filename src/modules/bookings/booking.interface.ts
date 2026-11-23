@@ -18,13 +18,20 @@ export interface BookingDocument {
   customerName: string;
   customerEmail: string;
   phone: string;
+  customerPhone?: string; // alias for phone per spec
   address: string;
   preferredDate: Date; // when customer wants service
   problemDescription: string;
   status: BookingStatus;
   basePrice: number;
-  finalAmount?: number; // set by technician when completing
+  finalAmount?: number; // set by technician when completing, default basePrice per spec
   paymentStatus: PaymentStatus;
+  // Denormalized snapshots per spec — additive for backward compatibility
+  serviceTitle?: string;
+  serviceImage?: string;
+  category?: string;
+  technicianName?: string;
+  technicianEmail?: string;
   createdAt: Date;
   updatedAt: Date;
 }

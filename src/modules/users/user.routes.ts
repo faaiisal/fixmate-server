@@ -1,25 +1,23 @@
 import { Router } from "express";
-import { requireAuth } from "../../middlewares/auth.middleware.js";
-import { roleMiddleware } from "../../middlewares/role.middleware.js";
+import { verifyToken, verifyAdmin } from "../../middlewares/verify.middleware.js";
 import * as userController from "./user.controller.js";
 
 const router = Router();
 
-// All routes require auth (since users module is protected) — except we will allow optional for me? But require auth for all
-// Apply requireAuth globally for this router
-
+// All routes require auth — per Challenge 2: PATCH /api/users/profile is verifyToken only
 // Current user — get own data
-router.get("/me", requireAuth, userController.getMe);
+router.get("/me", verifyToken, userController.getMe);
 
-// Own profile
-router.get("/profile", requireAuth, userController.getProfile);
-router.put("/profile", requireAuth, userController.updateProfile);
-router.patch("/profile", requireAuth, userController.updateProfile);
+// Own profile — per Challenge 2: verifyToken
+router.get("/profile", verifyToken, userController.getProfile);
+router.put("/profile", verifyToken, userController.updateProfile);
+router.patch("/profile", verifyToken, userController.updateProfile);
 
-// Admin routes
-router.get("/stats", requireAuth, roleMiddleware("admin"), userController.getUserStats);
-router.get("/", requireAuth, roleMiddleware("admin"), userController.listUsers);
-router.get("/:id", requireAuth, roleMiddleware("admin"), userController.getUserById);
-router.patch("/:id/role", requireAuth, roleMiddleware("admin"), userController.updateUserRole);
+// Admin routes — per Challenge 2: verifyToken, verifyAdmin
+// GET /api/admin/users, PATCH /api/admin/users/:id/role
+router.get("/stats", verifyToken, verifyAdmin, userController.getUserStats);
+router.get("/", verifyToken, verifyAdmin, userController.listUsers);
+router.get("/:id", verifyToken, verifyAdmin, userController.getUserById);
+router.patch("/:id/role", verifyToken, verifyAdmin, userController.updateUserRole);
 
 export default router;

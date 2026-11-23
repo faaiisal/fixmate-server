@@ -11,6 +11,8 @@ import {
 } from "./booking.interface.js";
 import { ServiceDocument } from "../services/service.interface.js";
 import { UserDocument } from "../users/user.interface.js";
+import { escapeRegExp } from "../../utils/escape-regexp.js";
+import { normalizePaymentStatus } from "../../utils/mapping.js";
 
 function toObjectId(id: string): ObjectId {
   if (!ObjectId.isValid(id)) {
@@ -23,7 +25,7 @@ export interface ListBookingsOptions {
   page?: number;
   limit?: number;
   status?: BookingStatus;
-  paymentStatus?: "pending" | "paid" | "failed";
+  paymentStatus?: "pending" | "paid" | "failed" | "unpaid";
   serviceId?: string;
   customerId?: string;
   technicianId?: string;
@@ -108,16 +110,36 @@ export async function createBooking(
     customerName: (customerUser as any).name,
     customerEmail: (customerUser as any).email,
     phone: input.phone.trim(),
+    customerPhone: input.phone.trim(), // alias per spec
     address: input.address.trim(),
     preferredDate,
     problemDescription: input.problemDescription.trim(),
     status: "requested",
     basePrice: service.basePrice,
-    finalAmount: undefined,
-    paymentStatus: "pending",
+    finalAmount: service.basePrice, // default basePrice per spec, set to undefined previously but spec says default basePrice
+    paymentStatus: "pending", // internal pending = assignment unpaid
+    // Denormalized snapshots per spec — additive, preserves if service edited/deleted later
+    serviceTitle: service.title,
+    serviceImage: service.image,
+    category: service.category,
+    technicianName: (service as any).technicianName || undefined,
+    technicianEmail: (service as any).technicianEmail || undefined,
     createdAt: now,
     updatedAt: now,
   };
+
+  // If service doesn't have technicianName/Email denormalized (legacy), fetch technician user
+  if (!booking.technicianName || !booking.technicianEmail) {
+    try {
+      const techUser = await db.collection(COLLECTIONS.USERS).findOne({ _id: service.technicianId as never } as any);
+      if (techUser) {
+        booking.technicianName = (techUser as any).name || booking.technicianName;
+        booking.technicianEmail = (techUser as any).email || booking.technicianEmail;
+      }
+    } catch {
+      // ignore, keep undefined
+    }
+  }
 
   try {
     const result = await db.collection(COLLECTIONS.BOOKINGS).insertOne(booking as any);
@@ -177,10 +199,13 @@ export async function getCustomerBookings(
 
   const filter: any = { customerId: customerOid };
   if (options.status) filter.status = options.status;
-  if (options.paymentStatus) filter.paymentStatus = options.paymentStatus;
+  if (options.paymentStatus) {
+    const normalized = normalizePaymentStatus(options.paymentStatus);
+    if (normalized) filter.paymentStatus = normalized;
+  }
   if (options.serviceId) filter.serviceId = toObjectId(options.serviceId);
   if (options.search) {
-    const regex = new RegExp(options.search.trim(), "i");
+    const regex = new RegExp(escapeRegExp(options.search.trim()), "i");
     filter.$or = [{ problemDescription: regex }, { customerName: regex }];
   }
 
@@ -212,9 +237,12 @@ export async function getTechnicianBookings(
 
   const filter: any = { technicianId: techOid };
   if (options.status) filter.status = options.status;
-  if (options.paymentStatus) filter.paymentStatus = options.paymentStatus;
+  if (options.paymentStatus) {
+    const normalized = normalizePaymentStatus(options.paymentStatus);
+    if (normalized) filter.paymentStatus = normalized;
+  }
   if (options.search) {
-    const regex = new RegExp(options.search.trim(), "i");
+    const regex = new RegExp(escapeRegExp(options.search.trim()), "i");
     filter.$or = [{ problemDescription: regex }, { customerName: regex }];
   }
 
@@ -242,12 +270,15 @@ export async function adminListBookings(options: ListBookingsOptions) {
 
   const filter: any = {};
   if (options.status) filter.status = options.status;
-  if (options.paymentStatus) filter.paymentStatus = options.paymentStatus;
+  if (options.paymentStatus) {
+    const normalized = normalizePaymentStatus(options.paymentStatus);
+    if (normalized) filter.paymentStatus = normalized;
+  }
   if (options.serviceId) filter.serviceId = toObjectId(options.serviceId);
   if (options.customerId) filter.customerId = toObjectId(options.customerId);
   if (options.technicianId) filter.technicianId = toObjectId(options.technicianId);
   if (options.search) {
-    const regex = new RegExp(options.search.trim(), "i");
+    const regex = new RegExp(escapeRegExp(options.search.trim()), "i");
     filter.$or = [
       { customerName: regex },
       { customerEmail: regex },

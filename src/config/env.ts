@@ -31,6 +31,12 @@ function getNumber(key: string, fallback: number): number {
   return parsed;
 }
 
+function getBoolean(key: string, fallback: boolean): boolean {
+  const raw = process.env[key];
+  if (!raw) return fallback;
+  return raw.toLowerCase() === "true" || raw === "1";
+}
+
 export interface Env {
   PORT: number;
   NODE_ENV: "development" | "production" | "test";
@@ -44,6 +50,7 @@ export interface Env {
   STRIPE_CURRENCY: string;
   IMGBB_API_KEY?: string;
   NEXT_PUBLIC_API_URL?: string;
+  ALLOW_USERID_BEARER: boolean;
 }
 
 function loadEnv(): Env {
@@ -60,6 +67,7 @@ function loadEnv(): Env {
     STRIPE_CURRENCY: getEnv("STRIPE_CURRENCY", false, "usd") || "usd",
     IMGBB_API_KEY: getEnv("IMGBB_API_KEY", false, undefined),
     NEXT_PUBLIC_API_URL: getEnv("NEXT_PUBLIC_API_URL", false, undefined),
+    ALLOW_USERID_BEARER: getBoolean("ALLOW_USERID_BEARER", false),
   };
 
   // Validate critical formats loosely
