@@ -24,7 +24,7 @@ Deleted Admin accounts: `admin1@epyra.com` and `smithadmin@epyra.com` are no lon
 *Public signup only customer|technician, even crafted role:admin forced to customer. Admin remains valid role for manually provisioned accounts like `admin@epyra.com`.*
 
 ## Key Features Implemented
-- BetterAuth session authentication: `authMiddleware` verifies `session` collection token + expiresAt, strict dev bypass requires `NODE_ENV=development && ALLOW_USERID_BEARER=true`, production blocks Bearer userId, cookie fallback for `credentials:include`.
+- BetterAuth opaque-session authentication (not JWT): `authMiddleware` verifies the `session` collection token + expiresAt, strict dev bypass requires `NODE_ENV=development && ALLOW_USERID_BEARER=true`, production blocks Bearer userId, cookie fallback for `credentials:include`. No JWT is issued or verified; no in-repo assignment spec mandates JWT (see frontend README "Authentication Model").
 - Role middlewares per Challenge 2: `verifyToken` 401, `verifyCustomer/Technician/Admin` 403, ownership via customerId/technicianId filters.
 - Security: `escapeRegExp` fixes ReDoS 9 places, `/api/status` admin-only, health minimal, CORS prod-only trusted origins (CLIENT_URL comma-separated), security headers nosniff/DENY/CSP/HSTS, rate limit 100/15min general 20/15min sensitive (custom in-memory, recommend helmet/express-rate-limit + Redis for prod), JSON limit 100kb separate from 5MB multer.
 - Data compatibility: `user` collection singular reuse BetterAuth, serviceMode mapping Home Visit→doorstep, Shop Drop-off→workshop, both inclusive, category alias AC→Air Conditioner TV→Television Laptop→Laptop & PC, paymentStatus unpaid→pending alias, additive snapshots technicianName/Email on service, serviceTitle/serviceImage/category/technicianName/Email/customerPhone on booking, stripeSessionId alias sessionId + snapshots on payment, no collection rename.
@@ -135,6 +135,11 @@ Indexes: `user_role`, `services_technicianId`, `services_approvalStatus`, `servi
 - 2+ payments: pending and paid, consistent with completed bookings only
 
 Final counts after seed: Users >=4, Technicians >=3, Services >=12 approved, Bookings 8 statuses, Payments 2.
+
+## Final Completion Notes (Assignment 09)
+- No backend code changes were required for the final completion pass: the existing public services endpoint (approved + available filtering, `limit`/`sortBy`/`sortOrder`) already supports the dynamic homepage, and the existing booking-detail endpoint with ownership checks already supports the tracking page. All completion edits are frontend-only.
+- Payment fail-closed behavior: when `STRIPE_SECRET_KEY` is missing or a placeholder, checkout creation returns 503 in production (`NODE_ENV=production`); development uses a mock checkout session. Real Stripe verification and webhook delivery require production credentials and are NOT VERIFIED.
+- Image upload requires a real `IMGBB_API_KEY`; with a placeholder key, uploads fail with a clear error and are NOT VERIFIED against the live provider.
 
 ## Author
 **Faisal Ahmed** — FixMate Phase 1-7 implementation: auth security, backend hardening, image upload, denormalization, booking detail/edit, search/filter/sort URL persistence, role middleware, payment fail-closed.
