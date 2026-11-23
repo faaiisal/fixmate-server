@@ -298,13 +298,10 @@ export async function verifyPayment(
     throw new AppError("Payment session not found", 404);
   }
 
-  // Ownership check
+  // Phase 8D Fix: Ownership check — only customer who owns payment may verify
+  // Return 403 for another customer's payment, do not allow technician/admin
   if (payment.customerId.toString() !== customerOid.toString()) {
-    // Allow admin? For now only owner, but we check role in controller for admin override
-    // For simplicity, we check in service: if customerId mismatches, we still allow if admin? We'll enforce in controller
-    // Here we just check basic ownership, controller can bypass for admin via separate path
-    // For customer verification, must be own
-    // We'll not throw for admin case in service, but controller will handle
+    throw new AppError("Forbidden: You can only verify your own payments", 403);
   }
 
   if (payment.paymentStatus === "paid") {

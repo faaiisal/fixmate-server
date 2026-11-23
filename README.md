@@ -15,12 +15,13 @@ This repository contains the backend REST API built with TypeScript, Express.js 
 Local: `http://localhost:8000/api` and `http://localhost:3000`
 
 ## Admin Credentials
-Seeded via `npm run seed` (default password `Password123!` hashed with BetterAuth scrypt):
-- Admin: `admin1@epyra.com` / `smithadmin@epyra.com` (role admin, manually provisioned, public self-registration blocked via databaseHooks + watcher)
-- Technician: `technician.seed1@fixmate.dev`, `technician.seed2@fixmate.dev`, `mobarak@epyra.com`
-- Customer: `customer.seed1@fixmate.dev`, `customer.seed2@fixmate.dev`
+- **Current Admin (production DB):** `admin@epyra.com` — role `admin`, manually provisioned, password privately configured in the database and **not** a published default credential. Public self-registration as admin blocked via `databaseHooks` + watcher.
+- **Technician (seeded, default password `Password123!` hashed with BetterAuth scrypt):** `technician.seed1@fixmate.dev`, `technician.seed2@fixmate.dev`, `mobarak@epyra.com`
+- **Customer (seeded, default password `Password123!`):** `customer.seed1@fixmate.dev`, `customer.seed2@fixmate.dev`
 
-*Public signup only customer|technician, even crafted role:admin forced to customer. Admin remains valid role for manually provisioned accounts.*
+Deleted Admin accounts: `admin1@epyra.com` and `smithadmin@epyra.com` are no longer present.
+
+*Public signup only customer|technician, even crafted role:admin forced to customer. Admin remains valid role for manually provisioned accounts like `admin@epyra.com`.*
 
 ## Key Features Implemented
 - BetterAuth session authentication: `authMiddleware` verifies `session` collection token + expiresAt, strict dev bypass requires `NODE_ENV=development && ALLOW_USERID_BEARER=true`, production blocks Bearer userId, cookie fallback for `credentials:include`.

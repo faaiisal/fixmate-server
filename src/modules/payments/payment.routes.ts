@@ -15,7 +15,8 @@ router.post(
 router.get(
   "/verify",
   verifyToken,
-  paymentController.verifyPayment // allow customer and admin via controller logic, but per Challenge 2 we could restrict to customer,admin - already role check inside
+  verifyCustomer,
+  paymentController.verifyPayment
 );
 
 router.get(
