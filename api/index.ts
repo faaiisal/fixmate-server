@@ -10,10 +10,10 @@ let isWatcherStarted = false;
 
 export default async function handler(req: any, res: any) {
   try {
-    // Connect to MongoDB once per cold start, reuse on warm starts
+    // Connect to MongoDB: reuses healthy connection on warm starts, reconnects if closed
+    const { db } = await connectDB();
     if (!isConnected) {
-      console.log("🔌 Vercel serverless: connecting to MongoDB...");
-      const { db } = await connectDB();
+      console.log("🔌 Vercel serverless: initializing database features...");
       isConnected = true;
       console.log("✅ MongoDB connected for serverless");
 

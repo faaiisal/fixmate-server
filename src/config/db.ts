@@ -5,6 +5,31 @@ let client: MongoClient | null = null;
 let db: Db | null = null;
 let connectPromise: Promise<{ client: MongoClient; db: Db }> | null = null;
 
+interface TopologyLike {
+  topology?: {
+    isDestroyed?: () => boolean;
+    isClosed?: () => boolean;
+    s?: {
+      state?: string;
+    };
+  };
+}
+
+export function isClientUsable(c: MongoClient | null | undefined): boolean {
+  if (!c) return false;
+  try {
+    const topology = (c as unknown as TopologyLike).topology;
+    if (!topology) return true;
+    if (typeof topology.isDestroyed === "function" && topology.isDestroyed()) return false;
+    if (typeof topology.isClosed === "function" && topology.isClosed()) return false;
+    const state = topology.s?.state;
+    if (state === "closed" || state === "closing") return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Single reusable MongoClient connection.
  * - Connects once, reuses client
@@ -13,8 +38,15 @@ let connectPromise: Promise<{ client: MongoClient; db: Db }> | null = null;
  * - Handles graceful shutdown
  */
 export async function connectDB(): Promise<{ client: MongoClient; db: Db }> {
-  if (db && client) {
+  if (db && client && isClientUsable(client)) {
     return { client, db };
+  }
+
+  if (client && !isClientUsable(client)) {
+    console.warn("⚠️ [Backend Mongo] Cached client topology is closed/destroyed; resetting instance.");
+    client = null;
+    db = null;
+    connectPromise = null;
   }
 
   if (connectPromise) {
